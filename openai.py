@@ -38,7 +38,7 @@ st.markdown("""
     }
     .chat-message {
         background: #fff;
-        color: #000; /* Fix: Visible text */
+        color: #000;
         border-radius: 10px;
         padding: 1.1rem 1rem;
         margin: 0.8rem 0;
@@ -57,11 +57,6 @@ st.markdown("""
         padding: 0.6rem 1rem !important;
         background: #faf6ff !important;
         width: 100%;
-    }
-    .file-uploader {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
     }
     .file-uploader input[type="file"] {
         display: none;
@@ -99,7 +94,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Main Heading ---
+# --- Heading ---
 st.markdown('<div class="main-title">🎓 Pathfinder – Career Counsellor</div>', unsafe_allow_html=True)
 st.markdown(
     "<div style='text-align:center; color:#6e48aa; font-size:1.1rem; margin-bottom:1.2rem;'>"
@@ -108,7 +103,7 @@ st.markdown(
     "</div>", unsafe_allow_html=True
 )
 
-# --- System Prompt ---
+# --- Prompt ---
 DOMAIN_PROMPT = (
     "You are a helpful and knowledgeable career/job/college counselling specialist. "
     "Only respond to career/job/college questions. If a question is outside this domain, politely refuse to answer."
@@ -143,7 +138,7 @@ def extract_text_from_pdf(file):
     except Exception as e:
         return f"❌ Error reading PDF: {e}"
 
-# --- Job Search Function ---
+# --- Job Search ---
 def search_jobs(query, location="India"):
     url = f"https://{RAPIDAPI_HOST}/search"
     params = {"query": query, "location": location, "page": "1", "num_pages": "1"}
@@ -169,7 +164,7 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(f"<div class='chat-message'>{msg['content']}</div>", unsafe_allow_html=True)
 
-# --- Chat Form ---
+# --- Form Layout ---
 with st.form("chat_form", clear_on_submit=True):
     st.markdown('<div class="form-row">', unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns([6, 1, 2, 2])
@@ -212,7 +207,7 @@ with st.form("chat_form", clear_on_submit=True):
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# --- Resume Upload Handling ---
+# --- Resume Upload ---
 if uploaded_file:
     st.info(f"✅ File uploaded: {uploaded_file.name}")
     st.write("📄 File type:", uploaded_file.type)
@@ -245,7 +240,8 @@ Resume Content:
             try:
                 res = model.generate_content(analysis_prompt)
                 st.chat_message("assistant").markdown(
-                    f"<div class='chat-message'>{res.text}</div>", unsafe_allow_html=True
+                    f"<div style='background:#fff; color:#000; padding:1.1rem 1rem; border-radius:10px;'>{res.text}</div>",
+                    unsafe_allow_html=True
                 )
                 st.session_state.messages.append({"role": "assistant", "content": res.text})
             except Exception as e:
@@ -277,6 +273,8 @@ if submitted and user_input:
             bot_reply = f"⚠ Error: {e}"
 
     st.chat_message("assistant", avatar="OIP.webp").markdown(
-        f"<div class='chat-message'>{bot_reply}</div>", unsafe_allow_html=True
+        f"<div style='background:#fff; color:#000; padding:1.1rem 1rem; border-radius:10px;'>{bot_reply}</div>",
+        unsafe_allow_html=True
     )
     st.session_state.messages.append({"role": "assistant", "content": bot_reply})
+    
