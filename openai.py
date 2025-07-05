@@ -21,89 +21,82 @@ model = genai.GenerativeModel("gemini-2.0-flash")
 # --- Streamlit Page Setup ---
 st.set_page_config(page_title="Pathfinder - Career Counsellor", layout="centered")
 
-# --- Custom CSS for Professional Layout ---
+# --- Custom CSS ---
 st.markdown("""
-    <style>
-        /* Main heading styling */
-        .main-title {
-            font-size: 2.6rem;
-            font-weight: 700;
-            color: #fff;
-            background: linear-gradient(90deg, #6e48aa 0%, #9d50bb 100%);
-            padding: 1.2rem 0;
-            border-radius: 12px;
-            text-align: center;
-            margin-bottom: 1.1rem;
-            box-shadow: 0 4px 12px rgba(110, 72, 170, 0.12);
-            letter-spacing: 1.5px;
-        }
-        /* Chat message styling */
-        .chat-message {
-            background: #fff;
-            border-radius: 10px;
-            padding: 1.1rem 1rem;
-            margin: 0.8rem 0;
-            box-shadow: 0 2px 4px rgba(110, 72, 170, 0.07);
-        }
-        /* Form row styling */
-        .form-row {
-            display: flex;
-            gap: 0.5rem;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }
-        /* Search box styling */
-        .search-box input {
-            font-size: 1.1rem !important;
-            border-radius: 6px !important;
-            border: 1.5px solid #bca6e6 !important;
-            padding: 0.6rem 1rem !important;
-            background: #faf6ff !important;
-            width: 100%;
-        }
-        /* File uploader styling */
-        .file-uploader {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        .file-uploader input[type="file"] {
-            display: none;
-        }
-        .file-uploader label {
-            font-size: 1rem !important;
-            color: #6e48aa !important;
-            font-weight: 500 !important;
-            padding: 0.4rem 0.8rem !important;
-            border-radius: 5px !important;
-            background: #f2e8fa !important;
-            border: 1.2px solid #bca6e6 !important;
-            cursor: pointer;
-        }
-        /* Send button styling */
-        .send-btn button {
-            background: linear-gradient(90deg, #6e48aa 0%, #9d50bb 100%) !important;
-            color: #fff !important;
-            font-size: 1.1rem !important;
-            font-weight: 600 !important;
-            border-radius: 6px !important;
-            padding: 0.58rem 1.6rem !important;
-            border: none !important;
-            transition: background 0.2s;
-            width: 100%;
-        }
-        .send-btn button:hover {
-            background: linear-gradient(90deg, #9d50bb 0%, #6e48aa 100%) !important;
-        }
-        /* Hide label for file uploader */
-        .css-1y0tads, .css-1p05t8e {
-            display: none !important;
-        }
-        /* Adjust mic button */
-        .mic-btn {
-            margin-left: 0.3rem;
-        }
-    </style>
+<style>
+    .main-title {
+        font-size: 2.6rem;
+        font-weight: 700;
+        color: #fff;
+        background: linear-gradient(90deg, #6e48aa 0%, #9d50bb 100%);
+        padding: 1.2rem 0;
+        border-radius: 12px;
+        text-align: center;
+        margin-bottom: 1.1rem;
+        box-shadow: 0 4px 12px rgba(110, 72, 170, 0.12);
+        letter-spacing: 1.5px;
+    }
+    .chat-message {
+        background: #fff;
+        color: #000; /* Fix: Visible text */
+        border-radius: 10px;
+        padding: 1.1rem 1rem;
+        margin: 0.8rem 0;
+        box-shadow: 0 2px 4px rgba(110, 72, 170, 0.07);
+    }
+    .form-row {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .search-box input {
+        font-size: 1.1rem !important;
+        border-radius: 6px !important;
+        border: 1.5px solid #bca6e6 !important;
+        padding: 0.6rem 1rem !important;
+        background: #faf6ff !important;
+        width: 100%;
+    }
+    .file-uploader {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .file-uploader input[type="file"] {
+        display: none;
+    }
+    .file-uploader label {
+        font-size: 1rem !important;
+        color: #6e48aa !important;
+        font-weight: 500 !important;
+        padding: 0.4rem 0.8rem !important;
+        border-radius: 5px !important;
+        background: #f2e8fa !important;
+        border: 1.2px solid #bca6e6 !important;
+        cursor: pointer;
+    }
+    .send-btn button {
+        background: linear-gradient(90deg, #6e48aa 0%, #9d50bb 100%) !important;
+        color: #fff !important;
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        border-radius: 6px !important;
+        padding: 0.58rem 1.6rem !important;
+        border: none !important;
+        transition: background 0.2s;
+        width: 100%;
+    }
+    .send-btn button:hover {
+        background: linear-gradient(90deg, #9d50bb 0%, #6e48aa 100%) !important;
+    }
+    .css-1y0tads, .css-1p05t8e {
+        display: none !important;
+    }
+    .mic-btn {
+        margin-left: 0.3rem;
+    }
+</style>
 """, unsafe_allow_html=True)
 
 # --- Main Heading ---
@@ -133,9 +126,7 @@ def extract_text_from_docx(file):
         file_buffer = BytesIO(file.read())
         doc = Document(file_buffer)
         text = "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
-        if not text.strip():
-            return "❌ No text found in DOCX."
-        return text
+        return text if text.strip() else "❌ No text found in DOCX."
     except Exception as e:
         return f"❌ Error reading DOCX: {e}"
 
@@ -148,9 +139,7 @@ def extract_text_from_pdf(file):
                 text = page.extract_text()
                 if text:
                     all_text += text + "\n"
-        if not all_text.strip():
-            return "❌ No text found in PDF (might be scanned image)."
-        return all_text
+        return all_text if all_text.strip() else "❌ No text found in PDF (might be scanned image)."
     except Exception as e:
         return f"❌ Error reading PDF: {e}"
 
@@ -180,12 +169,11 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(f"<div class='chat-message'>{msg['content']}</div>", unsafe_allow_html=True)
 
-# --- Chat Form with Custom Layout ---
+# --- Chat Form ---
 with st.form("chat_form", clear_on_submit=True):
     st.markdown('<div class="form-row">', unsafe_allow_html=True)
     col1, col2, col3, col4 = st.columns([6, 1, 2, 2])
 
-    # Search box
     with col1:
         user_text = st.text_input(
             "Ask your career-related question...",
@@ -194,7 +182,6 @@ with st.form("chat_form", clear_on_submit=True):
             placeholder="Type your question here...",
         )
 
-    # Mic button
     with col2:
         mic_text = speech_to_text(
             start_prompt="🎤",
@@ -204,7 +191,6 @@ with st.form("chat_form", clear_on_submit=True):
             key="mic"
         )
 
-    # File uploader with attachment icon
     with col3:
         uploaded_file = st.file_uploader(
             label="",
@@ -221,7 +207,6 @@ with st.form("chat_form", clear_on_submit=True):
                 "</div>", unsafe_allow_html=True
             )
 
-    # Send button
     with col4:
         submitted = st.form_submit_button("Send", use_container_width=True)
 
@@ -259,7 +244,9 @@ Resume Content:
         with st.spinner("🔍 Analyzing resume..."):
             try:
                 res = model.generate_content(analysis_prompt)
-                st.chat_message("assistant").markdown(res.text)
+                st.chat_message("assistant").markdown(
+                    f"<div class='chat-message'>{res.text}</div>", unsafe_allow_html=True
+                )
                 st.session_state.messages.append({"role": "assistant", "content": res.text})
             except Exception as e:
                 st.error(f"Gemini error: {e}")
@@ -289,5 +276,7 @@ if submitted and user_input:
         except Exception as e:
             bot_reply = f"⚠ Error: {e}"
 
-    st.chat_message("assistant", avatar="OIP.webp").markdown(bot_reply)
+    st.chat_message("assistant", avatar="OIP.webp").markdown(
+        f"<div class='chat-message'>{bot_reply}</div>", unsafe_allow_html=True
+    )
     st.session_state.messages.append({"role": "assistant", "content": bot_reply})
