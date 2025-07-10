@@ -177,9 +177,6 @@ if st.session_state.authenticated:
         with st.chat_message(msg["role"], avatar=avatar):
             st.markdown(f"<div class='chat-message'>{msg['content']}</div>", unsafe_allow_html=True)
 
-    # --- Scroll to Bottom Button ---
-    if st.button("⬇️ Scroll to Bottom", use_container_width=True):
-        st.experimental_rerun()
 
     # --- Input Form (Below Messages) ---
     with st.form("chat_form", clear_on_submit=True):
