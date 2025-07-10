@@ -52,11 +52,10 @@ def authenticate(username, password):
 
 # --- Streamlit Page Setup ---
 st.set_page_config(page_title="Pathfinder - Career Counsellor", layout="centered")
-# --- Force sidebar open on app load ---
-try:
-    st.experimental_set_query_params(_sidebar="expanded")
-except:
-    pass
+# --- Force sidebar open on app load (using new API) ---
+if "_sidebar" not in st.query_params:
+    st.query_params["_sidebar"] = "expanded"
+    
     
 # --- Session State for Auth ---
 if "authenticated" not in st.session_state:
