@@ -237,9 +237,6 @@ Provide:
 
     # --- Display Chat Messages (Latest on Top) ---
     for msg in reversed(st.session_state.messages):
-        with st.chat_message(msg["role"]):
+        avatar = "OIP.webp" if msg["role"] == "assistant" else None
+        with st.chat_message(msg["role"], avatar=avatar):
             st.markdown(f"<div class='chat-message'>{msg['content']}</div>", unsafe_allow_html=True)
-
-else:
-    st.warning("🔐 Please log in or register to access the chatbot.")
-    
