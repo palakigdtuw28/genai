@@ -9,7 +9,6 @@ from docx import Document
 import pdfplumber
 from io import BytesIO
 from streamlit_mic_recorder import speech_to_text
-import re
 
 # --- Load Environment Variables ---
 load_dotenv()
@@ -21,25 +20,24 @@ RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST")
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-2.0-flash")
 
-# --- Page Config & Sidebar ---
+# --- Page Config ---
 st.set_page_config(page_title="Pathfinder - Career Counsellor", layout="centered")
+
+# --- Force Sidebar Open ---
 if "_sidebar" not in st.query_params:
     st.query_params["_sidebar"] = "expanded"
 
-# --- Auth Session State ---
+# --- Auth Session ---
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "auth_mode" not in st.session_state:
     st.session_state.auth_mode = "Login"
 
-# --- User Auth Utilities ---
+# --- User Auth Functions ---
 USER_DATA_FILE = "user_data.csv"
 
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
-
-def is_valid_email(email):
-    return re.match(r"[^@]+@[^@]+\\.[^@]+", email)
 
 def user_exists(username):
     if not os.path.exists(USER_DATA_FILE):
@@ -65,7 +63,7 @@ def authenticate(username, password):
     hashed_pw = hash_password(password)
     return ((df["Username"] == username) & (df["Password"] == hashed_pw)).any()
 
-# --- Sidebar Login/Register/Guest ---
+# --- Sidebar UI ---
 with st.sidebar:
     st.title("🔐 User Access")
     st.session_state.auth_mode = st.radio("Choose Mode", ["Login", "Register", "Guest"])
@@ -77,12 +75,9 @@ with st.sidebar:
         username = st.text_input("Username")
         pw = st.text_input("Password", type="password")
         confirm_pw = st.text_input("Confirm Password", type="password")
-
         if st.button("Register"):
-            if not is_valid_email(email):
-                st.warning("⚠ Please enter a valid email.")
-            elif user_exists(username):
-                st.warning("⚠ Username already exists.")
+            if user_exists(username):
+                st.warning("⚠ Username exists.")
             elif pw != confirm_pw:
                 st.warning("⚠ Passwords do not match.")
             else:
@@ -100,14 +95,13 @@ with st.sidebar:
                 st.session_state.authenticated = True
             else:
                 st.error("❌ Invalid credentials.")
-
     else:
-        st.session_state.authenticated = True  # Guest access
+        st.session_state.authenticated = True  # Guest
 
-# --- Authenticated User Access ---
+# --- If Authenticated, Show Main App ---
 if st.session_state.authenticated:
 
-    # --- UI Styling ---
+    # --- CSS Styling ---
     st.markdown("""
     <style>
         .main-title {
@@ -119,6 +113,8 @@ if st.session_state.authenticated:
             border-radius: 12px;
             text-align: center;
             margin-bottom: 1.1rem;
+            box-shadow: 0 4px 12px rgba(110, 72, 170, 0.12);
+            letter-spacing: 1.5px;
         }
         .chat-message {
             background: #fff;
@@ -131,10 +127,16 @@ if st.session_state.authenticated:
     </style>
     """, unsafe_allow_html=True)
 
+    # --- Heading ---
     st.markdown('<div class="main-title">🎓 Pathfinder – Career Counsellor</div>', unsafe_allow_html=True)
-    st.markdown("<div style='text-align:center; color:#6e48aa;'>Ask questions or upload your resume for analysis.</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div style='text-align:center; color:#6e48aa; font-size:1.1rem; margin-bottom:1.2rem;'>"
+        "Upload your resume or ask career/job/college-related questions.<br>"
+        "<span style='font-size:0.95rem; color:#888;'>Avoid using for emergencies.</span>"
+        "</div>", unsafe_allow_html=True
+    )
 
-    # --- State ---
+    # --- Session State ---
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "resume_text" not in st.session_state:
@@ -152,7 +154,7 @@ if st.session_state.authenticated:
     def extract_text_from_pdf(file):
         try:
             with pdfplumber.open(BytesIO(file.read())) as pdf:
-                return "\n".join([p.extract_text() for p in pdf.pages if p.extract_text()])
+                return "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
         except Exception as e:
             return f"❌ Error: {e}"
 
@@ -167,18 +169,11 @@ if st.session_state.authenticated:
             if not jobs:
                 return "🔍 No jobs found."
             return "\n\n".join([f"{j['job_title']} at {j['employer_name']}\n📍 {j['job_city']}, {j['job_country']}\n🔗 [Apply Here]({j['job_apply_link']})"
-                                    for j in jobs[:5]])
+                                for j in jobs[:5]])
         except Exception as e:
             return f"⚠ Error: {e}"
 
-    # --- Show Chat Messages Above Form with Avatar ---
-    for msg in reversed(st.session_state.messages):
-        avatar = "OIP.webp" if msg["role"] == "assistant" else None
-        with st.chat_message(msg["role"], avatar=avatar):
-            st.markdown(f"<div class='chat-message'>{msg['content']}</div>", unsafe_allow_html=True)
-
-
-    # --- Input Form (Below Messages) ---
+    # --- Chat Input Form ---
     with st.form("chat_form", clear_on_submit=True):
         col1, col2, col3 = st.columns([5, 1, 2])
         with col1:
@@ -188,12 +183,14 @@ if st.session_state.authenticated:
             mic_text = speech_to_text(start_prompt="🎤", stop_prompt="⏹", just_once=True, use_container_width=True)
         with col3:
             uploaded_file = st.file_uploader("", type=["pdf", "docx"], label_visibility="collapsed")
+
         submitted = st.form_submit_button("Send", use_container_width=True)
 
-    # --- Handle Input ---
+    # --- Handle Chat Input ---
     user_input = user_text or mic_text
     if submitted and user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
+
         DOMAIN_PROMPT = (
             "You are a helpful and knowledgeable career/job/college counselling specialist. "
             "Only respond to career/job/college questions. If a question is outside this domain, politely refuse to answer."
@@ -201,7 +198,7 @@ if st.session_state.authenticated:
         chat_history = "\n".join([f"{m['role'].capitalize()}: {m['content']}" for m in st.session_state.messages])
         full_prompt = f"{DOMAIN_PROMPT}\n\n{chat_history}\nUser: {user_input}"
 
-        if any(w in user_input.lower() for w in ["job", "jobs", "openings", "vacancy"]):
+        if any(word in user_input.lower() for word in ["job", "jobs", "openings", "vacancy"]):
             bot_reply = search_jobs(user_input)
         else:
             try:
@@ -212,8 +209,9 @@ if st.session_state.authenticated:
 
         st.session_state.messages.append({"role": "assistant", "content": bot_reply})
 
-    # --- Resume Upload + Analysis ---
+    # --- Resume Processing ---
     if uploaded_file:
+        st.info(f"✅ File uploaded: {uploaded_file.name}")
         if uploaded_file.type == "application/pdf":
             text = extract_text_from_pdf(uploaded_file)
         elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
@@ -221,8 +219,7 @@ if st.session_state.authenticated:
         else:
             text = "❌ Unsupported file format."
         st.session_state.resume_text = text
-
-        st.text_area("📄 Resume Extract (first 500 chars)", text[:500])
+        st.text_area("📄 Resume Text (First 500 chars)", text[:500])
 
         if "❌" not in text:
             analysis_prompt = f"""
@@ -234,6 +231,15 @@ Provide:
 3. Suggested roles
 4. Areas of improvement
 """
+            st.spinner("🔍 Analyzing resume...")
             res = model.generate_content(analysis_prompt)
             st.session_state.messages.append({"role": "assistant", "content": res.text})
+
+    # --- Display Chat Messages (Latest on Top) ---
+    for msg in reversed(st.session_state.messages):
+        with st.chat_message(msg["role"]):
+            st.markdown(f"<div class='chat-message'>{msg['content']}</div>", unsafe_allow_html=True)
+
+else:
+    st.warning("🔐 Please log in or register to access the chatbot.")
     
