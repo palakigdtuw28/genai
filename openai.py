@@ -171,9 +171,10 @@ if st.session_state.authenticated:
         except Exception as e:
             return f"⚠ Error: {e}"
 
-    # --- Show Chat Messages Above Form ---
+    # --- Show Chat Messages Above Form with Avatar ---
     for msg in reversed(st.session_state.messages):
-        with st.chat_message(msg["role"]):
+        avatar = "OIP.webp" if msg["role"] == "assistant" else None
+        with st.chat_message(msg["role"], avatar=avatar):
             st.markdown(f"<div class='chat-message'>{msg['content']}</div>", unsafe_allow_html=True)
 
     # --- Scroll to Bottom Button ---
@@ -237,8 +238,5 @@ Provide:
 4. Areas of improvement
 """
             res = model.generate_content(analysis_prompt)
-            for msg in reversed(st.session_state.messages):
-    avatar = "OIP.webp" if msg["role"] == "assistant" else None
-    with st.chat_message(msg["role"], avatar=avatar):
-        st.markdown(f"<div class='chat-message'>{msg['content']}</div>", unsafe_allow_html=True)
-        
+            st.session_state.messages.append({"role": "assistant", "content": res.text})
+    
