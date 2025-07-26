@@ -1,36 +1,28 @@
 import streamlit as st
 import google.generativeai as genai
 import os
-import requests
 import pandas as pd
 import hashlib
 from dotenv import load_dotenv
 from docx import Document
 import pdfplumber
 from io import BytesIO
-from streamlit_mic_recorder import speech_to_text
+import requests
 
-# --- Load Environment Variables ---
+# Load environment variables
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST")
 
-# --- Configure Gemini ---
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel("gemini-2.0-flash")
 
-# --- User Auth Setup ---
 USER_DATA_FILE = "user_data.csv"
 
+# --- Helper functions ---
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
-
-def user_exists(username):
-    if not os.path.exists(USER_DATA_FILE):
-        return False
-    df = pd.read_csv(USER_DATA_FILE)
-    return username in df["Username"].values
 
 def save_user(full_name, email, username, password):
     hashed_pw = hash_password(password)
@@ -50,338 +42,105 @@ def authenticate(username, password):
     hashed_pw = hash_password(password)
     return ((df["Username"] == username) & (df["Password"] == hashed_pw)).any()
 
-# --- Streamlit Page Setup ---
-st.set_page_config(page_title="Pathfinder - Career Counsellor", layout="centered")
+def extract_text_from_pdf(file):
+    with pdfplumber.open(BytesIO(file.read())) as pdf:
+        return "\n".join([page.extract_text() or '' for page in pdf.pages])
 
-# --- Session State for Auth ---
+def extract_text_from_docx(file):
+    doc = Document(BytesIO(file.read()))
+    return "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
+
+def extract_resume_text(file):
+    if file.type == "application/pdf":
+        return extract_text_from_pdf(file)
+    elif file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        return extract_text_from_docx(file)
+    else:
+        return ""
+
+# --- App logic ---
+st.set_page_config(page_title="Pathfinder Career Assistant", layout="centered")
+st.title("🔐 Pathfinder - Login / Registration")
+
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
-if "auth_mode" not in st.session_state:
-    st.session_state.auth_mode = "Login"
+if "resume_text" not in st.session_state:
+    st.session_state.resume_text = ""
 
-# --- Sidebar for Registration/Login ---
-with st.sidebar:
-    st.title("🔐 User Access")
-    st.session_state.auth_mode = st.radio("Choose Mode", ["Login", "Register", "Guest"])
+mode = st.radio("Choose Option", ["Login", "Register"])
 
-    if st.session_state.auth_mode == "Register":
-        st.subheader("📝 Register New Account")
-        r_full_name = st.text_input("Full Name")
-        r_email = st.text_input("Email")
-        r_username = st.text_input("Username")
-        r_password = st.text_input("Password", type="password")
-        r_confirm = st.text_input("Confirm Password", type="password")
-        if st.button("Register"):
-            if user_exists(r_username):
-                st.warning("⚠ Username already exists.")
-            elif r_password != r_confirm:
-                st.warning("⚠ Passwords do not match.")
-            else:
-                save_user(r_full_name, r_email, r_username, r_password)
-                st.success("✅ Registered successfully! Please login.")
-                st.session_state.auth_mode = "Login"
+if mode == "Register":
+    full_name = st.text_input("Full Name")
+    email = st.text_input("Email")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    confirm_password = st.text_input("Confirm Password", type="password")
+    if st.button("Register"):
+        if password != confirm_password:
+            st.warning("Passwords do not match.")
+        else:
+            save_user(full_name, email, username, password)
+            st.success("Registration successful. Please login.")
 
-    elif st.session_state.auth_mode == "Login":
-        st.subheader("🔐 Login")
-        l_username = st.text_input("Username")
-        l_password = st.text_input("Password", type="password")
-        if st.button("Login"):
-            if authenticate(l_username, l_password):
-                st.success("✅ Login successful!")
-                st.session_state.authenticated = True
-            else:
-                st.error("❌ Invalid username or password.")
-    else:
-        st.session_state.authenticated = True  # Guest mode
+elif mode == "Login":
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    if st.button("Login"):
+        if authenticate(username, password):
+            st.success("Login successful!")
+            st.session_state.authenticated = True
+        else:
+            st.error("Invalid credentials.")
 
-# --- Main App Access ---
+# --- Post-login views ---
 if st.session_state.authenticated:
+    st.sidebar.title("📌 Navigation")
+    page = st.sidebar.radio("Go to", ["Resume Analysis", "Skill Gap Analyzer", "Job Search"])
 
-    # --- Custom CSS ---
-    st.markdown("""
-    <style>
-        .main-title {
-            font-size: 2.6rem;
-            font-weight: 700;
-            color: #fff;
-            background: linear-gradient(90deg, #6e48aa 0%, #9d50bb 100%);
-            padding: 1.2rem 0;
-            border-radius: 12px;
-            text-align: center;
-            margin-bottom: 1.1rem;
-            box-shadow: 0 4px 12px rgba(110, 72, 170, 0.12);
-            letter-spacing: 1.5px;
-        }
-        .chat-message {
-            background: #fff;
-            color: #000;
-            border-radius: 10px;
-            padding: 1.1rem 1rem;
-            margin: 0.8rem 0;
-            box-shadow: 0 2px 4px rgba(110, 72, 170, 0.07);
-        }
-        .form-row {
-            display: flex;
-            gap: 0.5rem;
-            align-items: center;
-            margin-bottom: 0.5rem;
-        }
-        .search-box input {
-            font-size: 1.1rem !important;
-            border-radius: 6px !important;
-            border: 1.5px solid #bca6e6 !important;
-            padding: 0.6rem 1rem !important;
-            background: #faf6ff !important;
-            width: 100%;
-        }
-        .file-uploader input[type="file"] {
-            display: none;
-        }
-        .file-uploader label {
-            font-size: 1rem !important;
-            color: #6e48aa !important;
-            font-weight: 500 !important;
-            padding: 0.4rem 0.8rem !important;
-            border-radius: 5px !important;
-            background: #f2e8fa !important;
-            border: 1.2px solid #bca6e6 !important;
-            cursor: pointer;
-        }
-        .send-btn button {
-            background: linear-gradient(90deg, #6e48aa 0%, #9d50bb 100%) !important;
-            color: #fff !important;
-            font-size: 1.1rem !important;
-            font-weight: 600 !important;
-            border-radius: 6px !important;
-            padding: 0.58rem 1.6rem !important;
-            border: none !important;
-            transition: background 0.2s;
-            width: 100%;
-        }
-        .send-btn button:hover {
-            background: linear-gradient(90deg, #9d50bb 0%, #6e48aa 100%) !important;
-        }
-        .css-1y0tads, .css-1p05t8e {
-            display: none !important;
-        }
-        .mic-btn {
-            margin-left: 0.3rem;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # --- Heading ---
-    st.markdown('<div class="main-title">🎓 Pathfinder – Career Counsellor</div>', unsafe_allow_html=True)
-    # --- Skill Gap Analyzer UI ---
-with st.expander("🧠 Skill Gap Analyzer", expanded=False):
-    if not st.session_state.get("resume_text") or "❌" in st.session_state.get("resume_text"):
-        st.warning("📄 Please upload a valid resume to analyze skill gaps.")
-    else:
-        desired_role = st.text_input("🎯 Enter your desired job role or position", placeholder="e.g. Data Analyst")
-        if st.button("Analyze Skill Gaps"):
-            skill_gap_prompt = f"""
-You are a career coach and skill expert.
-
-Compare the following resume with the desired job role: "{desired_role}".
-
-Provide:
-1. List of matching skills from resume.
-2. Skills missing (gap).
-3. Tools, certifications or topics to learn.
-4. Online platforms or ways to gain those skills.
-
-Resume:
-{st.session_state.resume_text}
-"""
-            with st.spinner("🔍 Analyzing skill gaps..."):
-                try:
-                    gap_result = model.generate_content(skill_gap_prompt)
-                    st.markdown(
-                        f"<div style='background:#fff; color:#000; padding:1.1rem 1rem; border-radius:10px;'>{gap_result.text}</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.session_state.messages.append({"role": "assistant", "content": gap_result.text})
-                except Exception as e:
-                    st.error(f"Gemini error: {e}")
-
-    st.markdown(
-        "<div style='text-align:center; color:#6e48aa; font-size:1.1rem; margin-bottom:1.2rem;'>"
-        "Upload your resume or ask career/job/college-related questions.<br>"
-        "<span style='font-size:0.95rem; color:#888;'>Avoid using for emergencies.</span>"
-        "</div>", unsafe_allow_html=True
-    )
-
-    # --- Prompt ---
-    DOMAIN_PROMPT = (
-        "You are a helpful and knowledgeable career/job/college counselling specialist. "
-        "Only respond to career/job/college questions. If a question is outside this domain, politely refuse to answer."
-    )
-
-    # --- Session State ---
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "resume_text" not in st.session_state:
-        st.session_state.resume_text = ""
-
-    # --- Resume Extractors ---
-    def extract_text_from_docx(file):
-        try:
-            file_buffer = BytesIO(file.read())
-            doc = Document(file_buffer)
-            text = "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
-            return text if text.strip() else "❌ No text found in DOCX."
-        except Exception as e:
-            return f"❌ Error reading DOCX: {e}"
-
-    def extract_text_from_pdf(file):
-        try:
-            pdf_file = BytesIO(file.read())
-            with pdfplumber.open(pdf_file) as pdf:
-                all_text = ""
-                for page in pdf.pages:
-                    text = page.extract_text()
-                    if text:
-                        all_text += text + "\n"
-            return all_text if all_text.strip() else "❌ No text found in PDF (might be scanned image)."
-        except Exception as e:
-            return f"❌ Error reading PDF: {e}"
-
-    # --- Job Search ---
-    def search_jobs(query, location="India"):
-        url = f"https://{RAPIDAPI_HOST}/search"
-        params = {"query": query, "location": location, "page": "1", "num_pages": "1"}
-        headers = {
-            "X-RapidAPI-Key": RAPIDAPI_KEY,
-            "X-RapidAPI-Host": RAPIDAPI_HOST
-        }
-        try:
-            response = requests.get(url, headers=headers, params=params)
-            jobs = response.json().get("data", [])
-            if not jobs:
-                return "🔍 No jobs found for this query."
-            job_list = "\n\n".join(
-                [f"{job['job_title']} at {job['employer_name']}\n📍 {job['job_city']}, {job['job_country']}\n🔗 [Apply Here]({job['job_apply_link']})"
-                 for job in jobs[:5]]
-            )
-            return f"Here are some job openings:\n\n{job_list}"
-        except Exception as e:
-            return f"⚠ Failed to fetch jobs: {e}"
-
-    # --- Chat History ---
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(f"<div class='chat-message'>{msg['content']}</div>", unsafe_allow_html=True)
-
-    # --- Form Layout ---
-    with st.form("chat_form", clear_on_submit=True):
-        st.markdown('<div class="form-row">', unsafe_allow_html=True)
-        col1, col2, col3, col4 = st.columns([6, 1, 2, 2])
-
-        with col1:
-            user_text = st.text_input("Ask your career-related question...",
-                                      label_visibility="collapsed",
-                                      key="search_input",
-                                      placeholder="Type your question here...")
-
-        with col2:
-            mic_text = speech_to_text(
-                start_prompt="🎤",
-                stop_prompt="⏹",
-                just_once=True,
-                use_container_width=True,
-                key="mic"
-            )
-
-        with col3:
-            uploaded_file = st.file_uploader(
-                label="",
-                type=["pdf", "docx"],
-                label_visibility="collapsed",
-                key="resume_upload",
-                help="Upload your resume (PDF/DOCX)",
-                accept_multiple_files=False
-            )
-            if uploaded_file:
-                st.markdown(
-                    f"<div style='font-size:0.97rem; color:#6e48aa; margin-top:0.2rem; text-align:left;'>"
-                    f"📎 {uploaded_file.name}"
-                    "</div>", unsafe_allow_html=True
-                )
-
-        with col4:
-            submitted = st.form_submit_button("Send", use_container_width=True)
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # --- Resume Upload Handling ---
+    st.sidebar.markdown("---")
+    uploaded_file = st.sidebar.file_uploader("Upload Resume (PDF/DOCX)", type=["pdf", "docx"])
     if uploaded_file:
-        st.info(f"✅ File uploaded: {uploaded_file.name}")
-        st.write("📄 File type:", uploaded_file.type)
+        st.session_state.resume_text = extract_resume_text(uploaded_file)
 
-        if uploaded_file.type == "application/pdf":
-            st.session_state.resume_text = extract_text_from_pdf(uploaded_file)
-        elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            st.session_state.resume_text = extract_text_from_docx(uploaded_file)
+    if page == "Resume Analysis":
+        st.subheader("📄 Resume Analyzer")
+        if st.session_state.resume_text:
+            prompt = f"Analyze this resume and provide a summary of skills, experience, and suggestions:\n\n{st.session_state.resume_text}"
+            result = model.generate_content(prompt)
+            st.write(result.text)
         else:
-            st.error("❌ Unsupported file type.")
+            st.info("Please upload your resume from the sidebar.")
 
-        st.write("🧪 Extracted resume text (first 500 characters):")
-        st.code(st.session_state.resume_text[:500])
-
-        if st.session_state.resume_text and "❌" not in st.session_state.resume_text:
-            with st.expander("📄 Full Extracted Resume"):
-                st.text_area("Resume Content", st.session_state.resume_text, height=300)
-
-            analysis_prompt = f"""
-You are a professional career counsellor. Analyze the following resume and provide:
-1. Summary of candidate profile
-2. Strengths and skills
-3. Suggested job roles or industries
-4. Areas of improvement
-
-Resume Content:
-{st.session_state.resume_text}
-"""
-            with st.spinner("🔍 Analyzing resume..."):
-                try:
-                    res = model.generate_content(analysis_prompt)
-                    st.chat_message("assistant").markdown(
-                        f"<div style='background:#fff; color:#000; padding:1.1rem 1rem; border-radius:10px;'>{res.text}</div>",
-                        unsafe_allow_html=True
-                    )
-                    st.session_state.messages.append({"role": "assistant", "content": res.text})
-                except Exception as e:
-                    st.error(f"Gemini error: {e}")
+    elif page == "Skill Gap Analyzer":
+        st.subheader("🔍 Skill Gap Analyzer")
+        if st.session_state.resume_text:
+            role = st.text_input("Desired Job Role", placeholder="e.g., Data Scientist")
+            if st.button("Analyze Skill Gap"):
+                prompt = f"You are a career coach. Analyze the resume for skill gaps for the role '{role}'.\n\nResume:\n{st.session_state.resume_text}"
+                result = model.generate_content(prompt)
+                st.write(result.text)
         else:
-            st.error("❌ Failed to extract usable text from resume.")
+            st.info("Please upload your resume from the sidebar.")
 
-    # --- Handle Chat Submission ---
-    user_input = user_text or mic_text
-    if submitted and user_input:
-        st.chat_message("user").markdown(user_input)
-        st.session_state.messages.append({"role": "user", "content": user_input})
-
-        chat_history = "\n".join(
-            [f"{msg['role'].capitalize()}: {msg['content']}" for msg in st.session_state.messages]
-        )
-        full_prompt = f"{DOMAIN_PROMPT}\n\n{chat_history}\n:User    {user_input}"
-
-        job_keywords = ["job", "jobs", "openings", "opportunity", "vacancy"]
-        search_keywords = ["find", "search", "looking", "get", "apply"]
-
-        if any(jk in user_input.lower() for jk in job_keywords) and any(sk in user_input.lower() for sk in search_keywords):
-            bot_reply = search_jobs(user_input)
-        else:
-            try:
-                response = model.generate_content(full_prompt)
-                bot_reply = response.text
-            except Exception as e:
-                bot_reply = f"⚠ Error: {e}"
-
-        st.chat_message("assistant", avatar="OIP.webp").markdown(
-            f"<div style='background:#fff; color:#000; padding:1.1rem 1rem; border-radius:10px;'>{bot_reply}</div>",
-            unsafe_allow_html=True
-        )
-        st.session_state.messages.append({"role": "assistant", "content": bot_reply})
-else:
-    st.warning("🔐 Please log in or register to access Pathfinder Career Assistant.")
+    elif page == "Job Search":
+        st.subheader("💼 Job Search")
+        role = st.text_input("Job Title", placeholder="e.g., Software Developer")
+        location = st.text_input("Location", placeholder="e.g., Delhi")
+        if st.button("Search Jobs"):
+            url = "https://jsearch.p.rapidapi.com/search"
+            params = {"query": f"{role} in {location}", "page": "1", "num_pages": "1"}
+            headers = {
+                "X-RapidAPI-Key": RAPIDAPI_KEY,
+                "X-RapidAPI-Host": RAPIDAPI_HOST,
+            }
+            response = requests.get(url, headers=headers, params=params)
+            if response.status_code == 200:
+                jobs = response.json().get("data", [])
+                for job in jobs:
+                    st.markdown(f"**{job['job_title']}** at *{job['employer_name']}*")
+                    st.write(job["job_description"][:300] + "...")
+                    st.markdown(f"[Apply Here]({job['job_apply_link']})")
+                    st.markdown("---")
+            else:
+                st.error("Failed to fetch job results. Check API credentials.")
+                    
