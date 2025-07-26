@@ -110,10 +110,16 @@ def skill_gap_ui():
 
 # Job Search
 def job_search_ui():
-    st.subheader("🔎 Job Search")
-    query = st.text_input("Enter job title and location (e.g., 'Software Developer in Mumbai')")
+    st.subheader("🔎 Job Search (Location Based)")
+    job_title = st.text_input("Enter Job Title", placeholder="e.g., Software Engineer")
+    location = st.text_input("Enter Location", placeholder="e.g., Mumbai")
 
-    if st.button("Search"):
+    if st.button("Search Jobs"):
+        if not job_title or not location:
+            st.warning("Please enter both job title and location.")
+            return
+
+        query = f"{job_title} in {location}"
         headers = {
             "X-RapidAPI-Key": RAPIDAPI_KEY,
             "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
@@ -124,15 +130,16 @@ def job_search_ui():
             res = requests.get("https://jsearch.p.rapidapi.com/search", headers=headers, params=params)
             jobs = res.json().get("data", [])
             if not jobs:
-                st.info("No jobs found.")
+                st.info("No jobs found for the specified location.")
             for job in jobs:
                 st.markdown(f"### 💼 {job['job_title']} at {job['employer_name']}")
                 st.markdown(f"📍 {job['job_city']}, {job['job_country']}")
+                st.markdown(f"📝 {job['job_description'][:200]}...")
                 st.markdown(f"[🔗 Apply Here]({job['job_apply_link']})")
                 st.markdown("---")
         except Exception as e:
             st.error(f"Error: {e}")
-
+            
 # Chatbot with mic
 def ask_pathfinder():
     st.subheader("💬 Ask Pathfinder (Chatbot with Mic)")
