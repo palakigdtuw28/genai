@@ -110,7 +110,7 @@ elif choice == "Skill Gap Analyzer":
                 )
                 resp = model.generate_content(prompt)
                 st.write(resp.text or "⚠️ No result.")
-                elif choice == "Ask 🤖 Chatbot":
+ elif choice == "Ask 🤖 Chatbot":
     st.header("💬 Ask Pathfinder")
     mic_input = speech_to_text(language="en", just_once=True, use_container_width=True)
     user_query = mic_input or st.text_input("Or type your question:")
