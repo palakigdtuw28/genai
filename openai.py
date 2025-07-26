@@ -25,7 +25,7 @@ def extract_resume_text(uploaded_file):
         doc = Document(uploaded_file)
         return "\n".join(para.text for para in doc.paragraphs if para.text).strip()
     return ""
-    def init_session():
+def init_session():
     for key, default in [
         ("authenticated", False),
         ("resume_text", ""),
