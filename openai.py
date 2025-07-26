@@ -73,7 +73,7 @@ st.sidebar.markdown("""
   👤 Profile | 🔓 Logout
 </div>
 """, unsafe_allow_html=True)
-    if choice == "Resume Analyzer":
+if choice == "Resume Analyzer":
     st.header("📄 Resume Analyzer")
     method = st.radio("Input Method:", ["Upload Resume", "Enter Manually"])
     if method == "Upload Resume":
