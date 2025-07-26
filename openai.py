@@ -24,8 +24,7 @@ def extract_resume_text(uploaded_file):
         return " ".join(paragraph.text for paragraph in doc.paragraphs)
     else:
         return ""
-
-# --- Session states ---
+        # --- Session states ---
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 if 'resume_text' not in st.session_state:
@@ -77,8 +76,7 @@ st.markdown("""
     👤 <a href="#profile">Profile</a> &nbsp; | &nbsp; 🔓 <a href="#logout">Logout</a>
 </div>
 """, unsafe_allow_html=True)
-
-# --- Tabs ---
+        # --- Tabs ---
 if tab == "Resume Analyzer":
     st.title("📄 Resume Analyzer")
 
@@ -104,66 +102,74 @@ if tab == "Resume Analyzer":
                     f"Resume:\n{st.session_state.resume_text}"
                 )
                 response = model.generate_content(prompt)
-                st.markdown(response.text)
+                st.markdown(response.text or "⚠️ No response from AI.")
     else:
         st.info("Please provide resume content by uploading or entering manually.")
-
 elif tab == "Skill Gap Analyzer":
     st.title("📊 Skill Gap Analyzer")
 
-    job_title = st.text_input("Target Job Role", placeholder="e.g., Frontend Developer")
+    job_role = st.text_input("Enter your target job role (e.g., Data Analyst)")
 
-    if job_title and st.session_state.resume_text:
-        if st.button("Analyze Skill Gap"):
+    if not st.session_state.resume_text:
+        st.info("Please upload or enter your resume in the 'Resume Analyzer' tab first.")
+    else:
+        if st.button("Find Skill Gaps"):
             with st.spinner("Analyzing skill gaps..."):
                 prompt = (
-                    f"You are an expert in career development.\n"
-                    f"Compare the following resume against the job role: {job_title}.\n"
-                    f"Provide:\n"
-                    f"1. Key skills required for {job_title}\n"
-                    f"2. Skills present and missing from the resume\n"
-                    f"3. Learning resources to fill the skill gap\n\n"
-                    f"Resume:\n{st.session_state.resume_text}"
+                    f"You are a career coach. Based on the resume text below, analyze which skills are "
+                    f"missing for the user to qualify for the job role: '{job_role}'.\n\n"
+                    f"Resume:\n{st.session_state.resume_text}\n\n"
+                    "Provide:\n"
+                    "1. Required skills for the job\n"
+                    "2. Skills already present\n"
+                    "3. Skill gaps\n"
+                    "4. How to acquire missing skills"
                 )
                 response = model.generate_content(prompt)
-                st.markdown(response.text)
-    else:
-        st.info("Please enter a job title and provide your resume in the previous section.")
-
+                st.markdown(response.text or "⚠️ No response from AI.")
 elif tab == "Ask 🤖":
-    st.subheader("💬 Ask Pathfinder")
-    st.markdown("Ask anything related to careers, jobs, or skills.")
-    
-    st.markdown("🎙️ Speak your question or type it below:")
-    mic_text = speech_to_text(language='en', use_container_width=True, just_once=True, key='ask_pathfinder_mic')
-    
-    if mic_text:
-        st.session_state.query = mic_text
-    else:
-        st.session_state.query = st.text_input("Your question", key="typed_query")
+    st.title("🤖 Ask Pathfinder Chatbot")
+    st.markdown("You can ask anything related to careers, skills, jobs, or education.")
+
+    mic_text = speech_to_text(language='en', start_prompt="🎙️ Speak now", stop_prompt="🛑 Stop")
+    text_input = st.text_input("Type your question below:", value=mic_text or "")
 
     if st.button("Ask"):
-        if st.session_state.query:
+        if text_input.strip():
             with st.spinner("Thinking..."):
-                response = model.generate_content(st.session_state.query)
-                st.markdown("**Response:**")
-                st.markdown(response.text)
-
+                response = model.generate_content(text_input)
+                st.markdown(response.text or "⚠️ No response from AI.")
+        else:
+            st.warning("Please ask a question via mic or text.")
 elif tab == "Job Search":
-    st.subheader("💼 Job Search")
-    st.markdown("Search for jobs by role and location (sample version)")
+    st.title("💼 Job Search")
+    st.markdown("Search for jobs by role and location (mock data shown)")
 
     role = st.text_input("Job Title", placeholder="e.g., Software Engineer")
     location = st.text_input("Location", placeholder="e.g., Delhi")
 
     if st.button("Search Jobs"):
         if role and location:
-            with st.spinner("Fetching job listings..."):
-                jobs = [
-                    {"title": f"{role} at ABC Corp", "location": location, "link": "https://example.com/job1"},
-                    {"title": f"Junior {role} at XYZ Ltd", "location": location, "link": "https://example.com/job2"},
+            with st.spinner("Searching..."):
+                mock_jobs = [
+                    {
+                        "title": f"{role} Intern at TechNova",
+                        "location": location,
+                        "link": "https://careers.technova.com"
+                    },
+                    {
+                        "title": f"{role} at CodeCraft Inc",
+                        "location": location,
+                        "link": "https://jobs.codecraft.com"
+                    }
                 ]
-                for job in jobs:
-                    st.markdown(f"🔹 **{job['title']}** — *{job['location']}*  \n[Apply Now]({job['link']})")
+                st.markdown("### 🔎 Job Listings")
+                for job in mock_jobs:
+                    st.markdown(f"""
+                        🔹 **{job['title']}**  
+                        📍 Location: *{job['location']}*  
+                        🔗 [Apply Now]({job['link']})
+                        ---
+                    """)
         else:
-            st.warning("Please enter both job title and location.")
+            st.warning("Please fill in both the job title and location.")
