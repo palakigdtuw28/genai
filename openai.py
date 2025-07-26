@@ -3,44 +3,42 @@ import hashlib
 import os
 import pandas as pd
 
-# Load or create user database (CSV)
+# ------------------- User DB Setup -------------------
 USERS_FILE = "users.csv"
 
 if not os.path.exists(USERS_FILE):
     df = pd.DataFrame(columns=["username", "email", "password_hash"])
     df.to_csv(USERS_FILE, index=False)
 
-# Hashing function
+# ------------------- Utility Functions -------------------
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Validate login
 def login_user(email, password):
     users = pd.read_csv(USERS_FILE)
     hashed = hash_password(password)
     user = users[(users["email"] == email) & (users["password_hash"] == hashed)]
-    return user if not user.empty else None
+    return user.iloc[0] if not user.empty else None
 
-# Register new user
 def register_user(username, email, password):
     users = pd.read_csv(USERS_FILE)
     if email in users["email"].values:
-        return False  # already registered
+        return False  # Already exists
     new_user = pd.DataFrame([[username, email, hash_password(password)]],
                             columns=["username", "email", "password_hash"])
     users = pd.concat([users, new_user], ignore_index=True)
     users.to_csv(USERS_FILE, index=False)
     return True
 
-# Session Init
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+# ------------------- Session Init -------------------
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "user_email" not in st.session_state:
+    st.session_state.user_email = ""
+if "username" not in st.session_state:
     st.session_state.username = ""
-    st.session_state.email = ""
 
-# Main Auth UI
-import streamlit as st
-
+# ------------------- Login/Register UI -------------------
 def login_register_ui():
     tab = st.radio("🔐 Pathfinder Login / Register", ["Login", "Register", "Guest"], horizontal=True)
 
@@ -48,48 +46,56 @@ def login_register_ui():
         email = st.text_input("Email", key="login_email")
         password = st.text_input("Password", type="password", key="login_pass")
         if st.button("Login"):
-            st.session_state.user_email = email
-            st.session_state.logged_in = True
-            st.success(f"✅ Logged in as {email}")
+            user = login_user(email, password)
+            if user is not None:
+                st.session_state.logged_in = True
+                st.session_state.user_email = user["email"]
+                st.session_state.username = user["username"]
+                st.success(f"✅ Logged in as {user['username']}")
+                st.experimental_rerun()
+            else:
+                st.error("❌ Invalid email or password.")
 
     elif tab == "Register":
-        new_email = st.text_input("Email", key="reg_email")
-        new_password = st.text_input("Password", type="password", key="reg_pass")
+        username = st.text_input("Username", key="reg_username")
+        email = st.text_input("Email", key="reg_email")
+        password = st.text_input("Password", type="password", key="reg_pass")
         if st.button("Register"):
-            st.session_state.user_email = new_email
-            st.session_state.logged_in = True
-            st.success(f"🎉 Registered and logged in as {new_email}")
+            if register_user(username, email, password):
+                st.session_state.logged_in = True
+                st.session_state.user_email = email
+                st.session_state.username = username
+                st.success(f"🎉 Registered and logged in as {username}")
+                st.experimental_rerun()
+            else:
+                st.warning("⚠️ Email already registered. Try logging in.")
 
     elif tab == "Guest":
         if st.button("Continue as Guest"):
-            st.session_state.user_email = "guest@pathfinder.ai"
             st.session_state.logged_in = True
+            st.session_state.user_email = "guest@pathfinder.ai"
+            st.session_state.username = "Guest"
             st.success("🟢 Logged in as guest")
+            st.experimental_rerun()
 
-# Use this at the start of your app:
-if "logged_in" not in st.session_state or not st.session_state.logged_in:
+# ------------------- Require Login -------------------
+if not st.session_state.logged_in:
     login_register_ui()
     st.stop()
-    
-# Show login/register UI if not logged in
-if not st.session_state.authenticated:
-    show_auth_ui()
-    st.stop()
-import streamlit as st
 
-# Function to clear session on logout
+# ------------------- Logout Function -------------------
 def clear_session():
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.success("Logged out successfully.")
     st.experimental_rerun()
 
-# --- Sidebar Layout ---
+# ------------------- Sidebar -------------------
 with st.sidebar:
     st.markdown("## 🌟 Pathfinder")
     st.markdown(f"👤 **Welcome, {st.session_state.username}**")
-
     st.markdown("---")
+
     nav_choice = st.radio("📌 Navigation", [
         "🏠 Home",
         "📄 Resume Analysis",
@@ -99,11 +105,7 @@ with st.sidebar:
     ], key="nav")
 
     st.markdown("---")
-    st.markdown("")
-
-    # Bottom right corner Profile + Logout icons using columns
-    bottom_space = 12  # number of empty lines to push buttons down
-    for _ in range(bottom_space):
+    for _ in range(12):
         st.text("")
 
     col1, col2 = st.columns(2)
@@ -112,6 +114,8 @@ with st.sidebar:
     with col2:
         if st.button("🚪 Logout", use_container_width=True):
             clear_session()
+            
+
 import pdfplumber
 from io import BytesIO
 
