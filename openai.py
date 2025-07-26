@@ -1,175 +1,139 @@
 import streamlit as st
 import os
-import google.generativeai as genai
 from dotenv import load_dotenv
+import google.generativeai as genai
 from docx import Document
 import pdfplumber
 from streamlit_mic_recorder import speech_to_text
 
-# --- Load Environment Variables ---
+# Load API key once
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-# --- Configure Gemini ---
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-2.0-flash")
 
-# --- Helper functions ---
+# Load model into session_state once
+if "gemini_model" not in st.session_state:
+    st.session_state.gemini_model = genai.GenerativeModel("models/gemini-1.5-pro-latest")
+
+model = st.session_state.gemini_model
 def extract_resume_text(uploaded_file):
-    if uploaded_file.name.endswith(".pdf"):
+    """Extracts text from PDF or DOCX resume uploads."""
+    if uploaded_file.name.lower().endswith(".pdf"):
         with pdfplumber.open(uploaded_file) as pdf:
-            return " ".join(page.extract_text() for page in pdf.pages if page.extract_text())
-    elif uploaded_file.name.endswith(".docx"):
+            return "\n".join(page.extract_text() or "" for page in pdf.pages).strip()
+    elif uploaded_file.name.lower().endswith(".docx"):
         doc = Document(uploaded_file)
-        return " ".join(paragraph.text for paragraph in doc.paragraphs)
+        return "\n".join(para.text for para in doc.paragraphs if para.text).strip()
+    return ""
+    def init_session():
+    for key, default in [
+        ("authenticated", False),
+        ("resume_text", ""),
+        ("guest", False),
+        ("chat_history", [])
+    ]:
+        if key not in st.session_state:
+            st.session_state[key] = default
+
+init_session()
+
+def show_login():
+    st.title("🔐 Pathfinder Access")
+    mode = st.radio("Mode:", ["Login", "Guest"])
+    if mode == "Login":
+        user = st.text_input("Username")
+        pwd = st.text_input("Password", type="password")
+        if st.button("Login") and user == "admin" and pwd == "admin":
+            st.session_state.authenticated = True
+            st.session_state.username = user
+            st.success("Logged in!")
     else:
-        return ""
-        # --- Session states ---
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-if 'resume_text' not in st.session_state:
-    st.session_state.resume_text = ""
-if 'guest_mode' not in st.session_state:
-    st.session_state.guest_mode = False
-
-# --- User Authentication ---
-def login_page():
-    st.title("🔐 Pathfinder Login")
-    choice = st.radio("Login or Register", ["Login", "Register", "Continue as Guest"])
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-
-    if choice == "Login":
-        if st.button("Login"):
-            if username == "admin" and password == "admin":
-                st.session_state.authenticated = True
-                st.success("Login successful!")
-            else:
-                st.error("Invalid credentials")
-    elif choice == "Register":
-        if st.button("Register"):
-            st.success("Registration successful. Please login.")
-    elif choice == "Continue as Guest":
-        st.session_state.guest_mode = True
-        st.session_state.authenticated = True
+        if st.button("Continue as Guest"):
+            st.session_state.authenticated = True
+            st.session_state.guest = True
+            st.session_state.username = "Guest"
+            st.success("Continuing as Guest")
 
 if not st.session_state.authenticated:
-    login_page()
+    show_login()
     st.stop()
+    st.sidebar.title("🧭 Pathfinder Menu")
+choice = st.sidebar.selectbox("Go to", [
+    "Resume Analyzer", "Skill Gap Analyzer", "Ask 🤖 Chatbot", "Job Search"
+])
 
-# --- Sidebar Navigation ---
-st.sidebar.title("🧭 Pathfinder Navigation")
-tab = st.sidebar.radio("Go to", ["Resume Analyzer", "Skill Gap Analyzer", "Ask 🤖", "Job Search"])
-
-# --- Sidebar Bottom UI ---
-st.markdown("""
+# Clean bottom position links
+st.sidebar.markdown("""
 <style>
 .sidebar-bottom {
-    position: fixed;
-    bottom: 20px;
-    left: 15px;
-    font-size: 16px;
-    z-index: 999;
+  position: fixed; bottom: 20px; left: 15px; font-size: 16px;
 }
 </style>
-<div class="sidebar-bottom">
-    👤 <a href="#profile">Profile</a> &nbsp; | &nbsp; 🔓 <a href="#logout">Logout</a>
+<div class='sidebar-bottom'>
+  👤 Profile | 🔓 Logout
 </div>
 """, unsafe_allow_html=True)
-        # --- Tabs ---
-if tab == "Resume Analyzer":
-    st.title("📄 Resume Analyzer")
-
-    method = st.radio("Choose input method:", ["Upload Resume", "Enter Manually"])
-
+    if choice == "Resume Analyzer":
+    st.header("📄 Resume Analyzer")
+    method = st.radio("Input Method:", ["Upload Resume", "Enter Manually"])
     if method == "Upload Resume":
-        uploaded_file = st.file_uploader("Upload your resume (PDF or DOCX)", type=["pdf", "docx"])
-        if uploaded_file:
-            st.session_state.resume_text = extract_resume_text(uploaded_file)
-            st.success("Resume text extracted successfully.")
+        file = st.file_uploader("Upload PDF or DOCX", type=["pdf","docx"])
+        if file:
+            st.session_state.resume_text = extract_resume_text(file)
+            st.success("Extracted resume text!")
     else:
-        st.session_state.resume_text = st.text_area("Paste your resume text below:")
+        st.session_state.resume_text = st.text_area("Paste your resume here")
 
-    if st.session_state.resume_text:
-        if st.button("Analyze Resume"):
-            with st.spinner("Analyzing your resume..."):
+    if st.session_state.resume_text and st.button("Analyze Resume"):
+        with st.spinner("Analyzing..."):
+            prompt = (
+                "You are a career expert. Analyze the resume for:\n"
+                "1. Strengths\n2. Weaknesses\n3. Suggestions\n\n"
+                f"{st.session_state.resume_text}"
+            )
+            resp = model.generate_content(prompt)
+            st.write(resp.text or "⚠️ No result.")
+        elif choice == "Skill Gap Analyzer":
+    st.header("📊 Skill Gap Analyzer")
+    role = st.text_input("Target Role (e.g., Data Analyst)")
+    if st.button("Find Skill Gaps"):
+        if not st.session_state.resume_text:
+            st.warning("Provide resume first.")
+        elif not role.strip():
+            st.warning("Enter a job role.")
+        else:
+            with st.spinner("Analyzing gaps..."):
                 prompt = (
-                    "You are a career expert reviewing a candidate's resume.\n\n"
-                    "Analyze the following resume text and provide:\n"
-                    "1. Summary of strengths\n"
-                    "2. Weaknesses or areas for improvement\n"
-                    "3. Suggestions to improve this resume\n\n"
-                    f"Resume:\n{st.session_state.resume_text}"
+                    f"Compare the resume against role '{role}' and show:\n"
+                    "– Required skills\n– Present skills\n– Missing skills\n– Learning tips\n\n"
+                    f"{st.session_state.resume_text}"
                 )
-                response = model.generate_content(prompt)
-                st.markdown(response.text or "⚠️ No response from AI.")
-    else:
-        st.info("Please provide resume content by uploading or entering manually.")
-elif tab == "Skill Gap Analyzer":
-    st.title("📊 Skill Gap Analyzer")
-
-    job_role = st.text_input("Enter your target job role (e.g., Data Analyst)")
-
-    if not st.session_state.resume_text:
-        st.info("Please upload or enter your resume in the 'Resume Analyzer' tab first.")
-    else:
-        if st.button("Find Skill Gaps"):
-            with st.spinner("Analyzing skill gaps..."):
-                prompt = (
-                    f"You are a career coach. Based on the resume text below, analyze which skills are "
-                    f"missing for the user to qualify for the job role: '{job_role}'.\n\n"
-                    f"Resume:\n{st.session_state.resume_text}\n\n"
-                    "Provide:\n"
-                    "1. Required skills for the job\n"
-                    "2. Skills already present\n"
-                    "3. Skill gaps\n"
-                    "4. How to acquire missing skills"
-                )
-                response = model.generate_content(prompt)
-                st.markdown(response.text or "⚠️ No response from AI.")
-elif tab == "Ask 🤖":
-    st.title("🤖 Ask Pathfinder Chatbot")
-    st.markdown("You can ask anything related to careers, skills, jobs, or education.")
-
-    mic_text = speech_to_text(language='en', start_prompt="🎙️ Speak now", stop_prompt="🛑 Stop")
-    text_input = st.text_input("Type your question below:", value=mic_text or "")
+                resp = model.generate_content(prompt)
+                st.write(resp.text or "⚠️ No result.")
+                elif choice == "Ask 🤖 Chatbot":
+    st.header("💬 Ask Pathfinder")
+    mic_input = speech_to_text(language="en", just_once=True, use_container_width=True)
+    user_query = mic_input or st.text_input("Or type your question:")
 
     if st.button("Ask"):
-        if text_input.strip():
-            with st.spinner("Thinking..."):
-                response = model.generate_content(text_input)
-                st.markdown(response.text or "⚠️ No response from AI.")
+        if not user_query:
+            st.warning("Please speak or type a question.")
         else:
-            st.warning("Please ask a question via mic or text.")
-elif tab == "Job Search":
-    st.title("💼 Job Search")
-    st.markdown("Search for jobs by role and location (mock data shown)")
-
-    role = st.text_input("Job Title", placeholder="e.g., Software Engineer")
-    location = st.text_input("Location", placeholder="e.g., Delhi")
-
-    if st.button("Search Jobs"):
+            with st.spinner("Thinking..."):
+                resp = model.generate_content(user_query)
+                st.write(resp.text or "⚠️ No response.")
+elif choice == "Job Search":
+    st.header("💼 Job Search")
+    role = st.text_input("Job Title")
+    location = st.text_input("Location")
+    if st.button("Search"):
         if role and location:
             with st.spinner("Searching..."):
-                mock_jobs = [
-                    {
-                        "title": f"{role} Intern at TechNova",
-                        "location": location,
-                        "link": "https://careers.technova.com"
-                    },
-                    {
-                        "title": f"{role} at CodeCraft Inc",
-                        "location": location,
-                        "link": "https://jobs.codecraft.com"
-                    }
+                jobs = [
+                    {"title":f"{role} at TechNova","loc":location,"link":"https://example.com/1"},
+                    {"title":f"Junior {role} at ABC Corp","loc":location,"link":"https://example.com/2"}
                 ]
-                st.markdown("### 🔎 Job Listings")
-                for job in mock_jobs:
-                    st.markdown(f"""
-                        🔹 **{job['title']}**  
-                        📍 Location: *{job['location']}*  
-                        🔗 [Apply Now]({job['link']})
-                        ---
-                    """)
+                for job in jobs:
+                    st.markdown(f"**{job['title']}** — {job['loc']}\n[Apply]({job['link']})\n---")
         else:
-            st.warning("Please fill in both the job title and location.")
+            st.warning("Fill both fields.")
