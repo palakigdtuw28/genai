@@ -93,7 +93,7 @@ if choice == "Resume Analyzer":
             )
             resp = model.generate_content(prompt)
             st.write(resp.text or "⚠️ No result.")
-        elif choice == "Skill Gap Analyzer":
+elif choice == "Skill Gap Analyzer":
     st.header("📊 Skill Gap Analyzer")
     role = st.text_input("Target Role (e.g., Data Analyst)")
     if st.button("Find Skill Gaps"):
