@@ -23,11 +23,11 @@ for key in ["users", "logged_in", "username", "chat_history"]:
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Auth screen
+# Auth screen with guest mode
 def auth_ui():
     st.set_page_config(page_title="Pathfinder", layout="centered")
     st.title("🧭 Pathfinder - Career Assistant")
-    st.markdown("### Login or Register")
+    st.markdown("### Login, Register or Continue as Guest")
 
     tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
 
@@ -52,6 +52,12 @@ def auth_ui():
             else:
                 st.session_state.users[new_user] = hash_password(new_pass)
                 st.success("✅ Registered! Please log in")
+
+    st.markdown("---")
+    if st.button("👤 Continue as Guest"):
+        st.session_state.logged_in = True
+        st.session_state.username = "Guest"
+        st.rerun()
 
 # Resume Analyzer
 def resume_analyzer_ui():
@@ -182,4 +188,3 @@ if not st.session_state.logged_in:
     auth_ui()
 else:
     main_app()
-                     
