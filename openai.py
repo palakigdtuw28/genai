@@ -39,42 +39,38 @@ if "authenticated" not in st.session_state:
     st.session_state.email = ""
 
 # Main Auth UI
-def show_auth_ui():
-    st.title("🔐 Pathfinder Login / Register")
-    tab = st.tabs(["Login", "Register", "Guest"])[0]
+import streamlit as st
 
-    with st.tabs(["Login", "Register", "Guest"])[0]:
-        email = st.text_input("Email")
-        password = st.text_input("Password", type="password")
+def login_register_ui():
+    tab = st.radio("🔐 Pathfinder Login / Register", ["Login", "Register", "Guest"], horizontal=True)
+
+    if tab == "Login":
+        email = st.text_input("Email", key="login_email")
+        password = st.text_input("Password", type="password", key="login_pass")
         if st.button("Login"):
-            user = login_user(email, password)
-            if user is not None:
-                st.session_state.authenticated = True
-                st.session_state.username = user["username"].values[0]
-                st.session_state.email = email
-                st.success("Logged in successfully!")
-                st.experimental_rerun()
-            else:
-                st.error("Invalid credentials")
+            st.session_state.user_email = email
+            st.session_state.logged_in = True
+            st.success(f"✅ Logged in as {email}")
 
-    with st.tabs(["Login", "Register", "Guest"])[1]:
-        username = st.text_input("New Username")
-        email_reg = st.text_input("New Email")
-        password_reg = st.text_input("New Password", type="password")
+    elif tab == "Register":
+        new_email = st.text_input("Email", key="reg_email")
+        new_password = st.text_input("Password", type="password", key="reg_pass")
         if st.button("Register"):
-            if register_user(username, email_reg, password_reg):
-                st.success("Registered successfully! Now log in.")
-            else:
-                st.warning("Email already registered.")
+            st.session_state.user_email = new_email
+            st.session_state.logged_in = True
+            st.success(f"🎉 Registered and logged in as {new_email}")
 
-    with st.tabs(["Login", "Register", "Guest"])[2]:
+    elif tab == "Guest":
         if st.button("Continue as Guest"):
-            st.session_state.authenticated = True
-            st.session_state.username = "Guest"
-            st.session_state.email = "guest@pathfinder.com"
-            st.success("Logged in as Guest")
-            st.experimental_rerun()
+            st.session_state.user_email = "guest@pathfinder.ai"
+            st.session_state.logged_in = True
+            st.success("🟢 Logged in as guest")
 
+# Use this at the start of your app:
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    login_register_ui()
+    st.stop()
+    
 # Show login/register UI if not logged in
 if not st.session_state.authenticated:
     show_auth_ui()
