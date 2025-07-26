@@ -1,179 +1,144 @@
 import streamlit as st
-import os
 import google.generativeai as genai
-import pdfplumber
+import os
+import requests
+import hashlib
 from dotenv import load_dotenv
-from docx import Document
-from io import BytesIO
-from streamlit_mic_recorder import speech_to_text
 
-# --- Load Environment Variables ---
+# Load environment variables
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+
+# Configure Gemini API
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-2.0-flash")
 
 # --- Session State Initialization ---
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+if "users" not in st.session_state:
+    st.session_state.users = {}  # Format: {username: hashed_password}
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
 if "username" not in st.session_state:
-    st.session_state.username = ""
-if "resume_text" not in st.session_state:
-    st.session_state.resume_text = ""
-if "auth_mode" not in st.session_state:
-    st.session_state.auth_mode = "login"
+    st.session_state.username = None
 
-# --- Simulated User Database ---
-user_db = {"guest": "guest"}  # Add guest login
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
-def extract_resume_text(file):
-    if file.name.endswith(".pdf"):
-        with pdfplumber.open(file) as pdf:
-            return "\n".join(page.extract_text() for page in pdf.pages if page.extract_text())
-    elif file.name.endswith(".docx"):
-        doc = Document(file)
-        return "\n".join(p.text for p in doc.paragraphs)
-    return ""
+# --- Password Hashing Function ---
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
-def login_ui():
-    st.markdown("## 👩🏻‍🎓 **Pathfinder**", unsafe_allow_html=True)
-    st.markdown("### Choose an option:")
+# --- Sidebar Authentication UI ---
+with st.sidebar:
+    st.title("🔐 Pathfinder Login")
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("🔐 Login"):
-            st.session_state.auth_mode = "login"
-    with col2:
-        if st.button("📝 Register"):
-            st.session_state.auth_mode = "register"
-    with col3:
-        if st.button("🚪 Guest"):
-            st.session_state.authenticated = True
-            st.session_state.username = "Guest"
-            return
+    menu = st.radio("Choose Action", ["Login", "Register", "Guest", "Logout"])
 
-    mode = st.session_state.get("auth_mode", "login")
-
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-
-    if mode == "register":
-        if st.button("Register"):
-            if username in user_db:
-                st.warning("Username already exists.")
-            else:
-                user_db[username] = password
-                st.success("Registered successfully. Please log in.")
-                st.session_state.auth_mode = "login"
-
-    elif mode == "login":
+    if menu == "Login":
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
         if st.button("Login"):
-            if user_db.get(username) == password:
-                st.session_state.authenticated = True
+            hashed_input = hash_password(password)
+            if username in st.session_state.users and st.session_state.users[username] == hashed_input:
+                st.session_state.logged_in = True
                 st.session_state.username = username
+                st.success(f"✅ Welcome back, {username}!")
+                st.rerun()
             else:
-                st.error("Invalid credentials.")
+                st.error("❌ Invalid username or password.")
 
-def main_app():
-    with st.sidebar:
-        tab = st.radio("📌 Navigation", ["Ask 🤖", "Resume Analyzer", "Skill Gap Analyzer", "Job Search"], key="main_tabs")
+    elif menu == "Register":
+        new_username = st.text_input("Create Username")
+        new_password = st.text_input("Create Password", type="password")
+        if st.button("Register"):
+            if new_username in st.session_state.users:
+                st.warning("⚠️ Username already exists.")
+            else:
+                st.session_state.users[new_username] = hash_password(new_password)
+                st.success("✅ Registration successful! Please login.")
+                st.rerun()
 
-    st.markdown(
-        """
-        <style>
-            div[data-testid="stSidebarNav"] ul {
-                padding-bottom: 80px;
-            }
-            .sidebar-bottom {
-                position: fixed;
-                bottom: 20px;
-                left: 10px;
-                font-size: 16px;
-            }
-        </style>
-        <div class="sidebar-bottom">
-            👤 <b>{}</b> &nbsp; | &nbsp; 🔓 <a href="/?logout=true">Logout</a>
-        </div>
-        """.format(st.session_state.username), unsafe_allow_html=True)
+    elif menu == "Guest":
+        if st.button("Enter as Guest"):
+            st.session_state.logged_in = True
+            st.session_state.username = "Guest"
+            st.success("✅ Guest mode activated.")
+            st.rerun()
 
-    if tab == "Ask 🤖":
-        st.title("💬 Ask Pathfinder")
-        text = speech_to_text(language="en")
-        user_input = st.text_input("Ask your question (or use mic above):", value=text if text else "")
-        if st.button("Ask") and user_input:
-            with st.spinner("Thinking..."):
-                response = model.generate_content(user_input)
-                st.markdown(response.text)
+    elif menu == "Logout":
+        if st.button("Logout"):
+            st.session_state.logged_in = False
+            st.session_state.username = None
+            st.session_state.chat_history.clear()
+            st.success("✅ You have been logged out.")
+            st.rerun()
 
-    elif tab == "Resume Analyzer":
-        st.title("📄 Resume Analyzer")
-        method = st.radio("Choose input method:", ["Upload Resume", "Enter Manually"])
+# --- Main App Content ---
+st.title("🧭 Pathfinder AI Career Assistant")
 
-        if method == "Upload Resume":
-            uploaded_file = st.file_uploader("Upload your resume (PDF or DOCX)", type=["pdf", "docx"])
-            if uploaded_file:
-                st.session_state.resume_text = extract_resume_text(uploaded_file)
-                st.success("Resume text extracted successfully.")
-        else:
-            st.session_state.resume_text = st.text_area("Paste your resume text below:")
+if not st.session_state.logged_in:
+    st.warning("🚪 Please login or use guest mode to continue.")
+    st.stop()
 
-        if st.session_state.resume_text:
-            if st.button("Analyze Resume"):
-                with st.spinner("Analyzing your resume..."):
-                    prompt = (
-                        "You are a career expert reviewing a candidate's resume.\n\n"
-                        "Analyze the following resume text and provide:\n"
-                        "1. Summary of strengths\n"
-                        "2. Weaknesses or areas for improvement\n"
-                        "3. Suggestions to improve this resume\n\n"
-                        f"Resume:\n{st.session_state.resume_text}"
-                    )
-                    response = model.generate_content(prompt)
-                    st.markdown(response.text)
-        else:
-            st.info("Please provide resume content by uploading or entering manually.")
+st.markdown(f"👋 Hello, **{st.session_state.username}**!")
 
-    elif tab == "Skill Gap Analyzer":
-        st.title("📊 Skill Gap Analyzer")
-        job_title = st.text_input("Target Job Role", placeholder="e.g., Frontend Developer")
+# ------------------------------
+# Chatbot Section
+# ------------------------------
+st.subheader("🤖 Ask AI Anything (Chatbot)")
 
-        if job_title and st.session_state.resume_text:
-            if st.button("Analyze Skill Gap"):
-                with st.spinner("Analyzing skill gaps..."):
-                    prompt = (
-                        f"You are an expert in career development.\n"
-                        f"Compare the following resume against the job role: {job_title}.\n"
-                        f"Provide:\n"
-                        f"1. Key skills required for {job_title}\n"
-                        f"2. Skills present and missing from the resume\n"
-                        f"3. Learning resources to fill the skill gap\n\n"
-                        f"Resume:\n{st.session_state.resume_text}"
-                    )
-                    response = model.generate_content(prompt)
-                    st.markdown(response.text)
-        else:
-            st.info("Please enter a job title and provide your resume in the previous section.")
+user_message = st.chat_input("Type your question here...")
 
-    elif tab == "Job Search":
-        st.title("💼 Job Search")
-        title = st.text_input("Enter Job Title", placeholder="e.g., Data Analyst")
-        location = st.text_input("Enter Location", placeholder="e.g., Delhi")
+# Display chat history (latest on top)
+for chat in reversed(st.session_state.chat_history):
+    with st.chat_message(chat["role"]):
+        st.markdown(chat["content"])
 
-        if st.button("Search Jobs") and title:
-            with st.spinner("Searching jobs..."):
-                prompt = (
-                    f"Suggest job listings with company names and brief roles for the title '{title}' in location '{location}'."
-                )
-                response = model.generate_content(prompt)
-                st.markdown(response.text)
+# Process chatbot input
+if user_message:
+    st.session_state.chat_history.append({"role": "user", "content": user_message})
+    with st.chat_message("assistant"):
+        try:
+            model = genai.GenerativeModel("gemini-pro")
+            response = model.generate_content(user_message)
+            ai_reply = response.text
+        except Exception as e:
+            ai_reply = f"❌ Error: {str(e)}"
+        st.markdown(ai_reply)
+        st.session_state.chat_history.append({"role": "assistant", "content": ai_reply})
 
-# --- App Execution ---
-if st.query_params.get("logout"):
-    st.session_state.authenticated = False
-    st.session_state.username = ""
+# ------------------------------
+# Job Search Section
+# ------------------------------
+st.subheader("🔍 Job Search")
 
-if st.session_state.authenticated:
-    main_app()
-else:
-    login_ui()
-    
+search_query = st.text_input("Enter job title & location (e.g. 'Software Engineer in Delhi')")
+
+if st.button("Search Jobs"):
+    if not RAPIDAPI_KEY:
+        st.error("❌ RAPIDAPI_KEY not configured.")
+    else:
+        headers = {
+            "X-RapidAPI-Key": RAPIDAPI_KEY,
+            "X-RapidAPI-Host": "jsearch.p.rapidapi.com"
+        }
+        params = {"query": search_query, "page": "1", "num_pages": "1"}
+
+        try:
+            response = requests.get("https://jsearch.p.rapidapi.com/search", headers=headers, params=params)
+            if response.status_code == 200:
+                jobs = response.json().get("data", [])
+                if not jobs:
+                    st.info("😕 No jobs found. Try a different query.")
+                for job in jobs:
+                    st.markdown(f"### 💼 {job['job_title']}")
+                    st.markdown(f"**Company:** {job['employer_name']}")
+                    st.markdown(f"📍 Location: {job['job_city']}, {job['job_country']}")
+                    st.markdown(f"🔗 [Apply Here]({job['job_apply_link']})")
+                    st.markdown("---")
+            else:
+                st.error(f"❌ Job API error: {response.status_code}")
+        except Exception as e:
+            st.error(f"❌ Failed to fetch jobs: {e}")
