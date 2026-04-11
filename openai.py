@@ -144,17 +144,34 @@ def job_search_ui():
 def ask_pathfinder():
     st.subheader("💬 Ask Pathfinder (Chatbot with Mic)")
 
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.write("🎤 Click the microphone button below to speak:")
+    
     mic_text = speech_to_text(language='en', use_container_width=True)
-    user_query = st.chat_input("Ask a career-related question...")
-    if mic_text:
-        user_query = mic_text
-
+    
+    # Display chat history
     for chat in reversed(st.session_state.chat_history):
         with st.chat_message(chat["role"]):
             st.markdown(chat["content"])
 
+    # Get user input from microphone or text
+    user_query = None
+    if mic_text:
+        st.success(f"✅ Microphone detected: {mic_text}")
+        user_query = mic_text
+    
+    # Text input as fallback
+    text_input = st.chat_input("Or type your question here...")
+    if text_input:
+        user_query = text_input
+
+    # Process the query
     if user_query:
         st.session_state.chat_history.append({"role": "user", "content": user_query})
+        with st.chat_message("user"):
+            st.markdown(user_query)
+        
         with st.chat_message("assistant"):
             try:
                 model = genai.GenerativeModel("gemini-2.0-flash")
